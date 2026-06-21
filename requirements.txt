@@ -1,0 +1,9 @@
+streamlit
+pandas
+chromadb
+sentence-transformers
+langchain
+langchain-community
+langchain-huggingface
+transformers
+torch

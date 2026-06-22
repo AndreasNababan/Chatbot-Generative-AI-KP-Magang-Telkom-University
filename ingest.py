@@ -6,9 +6,6 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# =====================================
-# LOAD CSV
-# =====================================
 
 CSV_PATH = "data/qa_kp_magang.csv"
 
@@ -19,16 +16,9 @@ for col in required_columns:
     if col not in df.columns:
         raise ValueError(f"Kolom '{col}' tidak ditemukan pada CSV")
 
-# =====================================
-# HAPUS DATABASE LAMA
-# =====================================
 
 if os.path.exists("chroma_db"):
     shutil.rmtree("chroma_db")
-
-# =====================================
-# BUILD DOCUMENTS
-# =====================================
 
 documents = []
 for _, row in df.iterrows():
@@ -43,22 +33,15 @@ for _, row in df.iterrows():
             page_content=content,
             metadata={
                 "question": question,
-                "category": category
+                "category": category    
             }
         )
     )
 
-# =====================================
-# EMBEDDING MODEL
-# =====================================
 
 embedding = HuggingFaceEmbeddings(
     model_name="intfloat/multilingual-e5-base"
 )
-
-# =====================================
-# CREATE CHROMA DB
-# =====================================
 
 vectordb = Chroma.from_documents(
     documents=documents,

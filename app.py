@@ -3,9 +3,6 @@ from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaLLM
 
-# =====================================
-# PAGE CONFIG
-# =====================================
 
 st.set_page_config(
     page_title="Chatbot KP & Magang",
@@ -13,9 +10,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================
-# LOAD LLM
-# =====================================
 
 @st.cache_resource
 def load_llm():
@@ -30,9 +24,6 @@ except Exception as e:
     st.error(f"Ollama tidak dapat dijalankan: {e}")
     st.stop()
 
-# =====================================
-# LOAD DATABASE
-# =====================================
 
 @st.cache_resource
 def load_database():
@@ -48,9 +39,6 @@ def load_database():
 
 db = load_database()
 
-# =====================================
-# SIDEBAR
-# =====================================
 
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=80)
@@ -60,9 +48,6 @@ with st.sidebar:
     if st.button("🗑️ Chat Baru", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
-# =====================================
-# HEADER
-# =====================================
 
 st.markdown("""
 <div style='text-align:center;margin-top:20px;margin-bottom:30px'>
@@ -114,10 +99,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# =====================================
-# CHAT HISTORY
-# =====================================
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -125,14 +106,8 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# =====================================
-# INPUT
-# =====================================
-
 prompt = st.chat_input("Tanyakan tentang KP atau Magang...")
 
-if "quick_question" in st.session_state:
-    prompt = st.session_state.pop("quick_question")
 
 def extract_answer(text):
     try:
@@ -149,9 +124,6 @@ def extract_answer(text):
     except:
         return text.strip()
 
-# =====================================
-# CHAT PROCESS
-# =====================================
 
 if prompt:
     st.session_state.messages.append(
@@ -221,9 +193,6 @@ JAWABAN:
         }
     )
 
-# =====================================
-# FOOTER
-# =====================================
 
 st.divider()
 

@@ -108,20 +108,56 @@ for message in st.session_state.messages:
 
 prompt = st.chat_input("Tanyakan tentang KP atau Magang...")
 
+# Pesan penolakan standar untuk pertanyaan di luar topik
+PESAN_DILUAR_TOPIK = (
+    "Maaf, saya hanya dapat menjawab pertanyaan seputar **Kerja Praktik (KP)** "
+    "dan **Magang** di Telkom University. "
+    "Silakan ajukan pertanyaan yang berkaitan dengan topik tersebut. 😊"
+)
+
+# Batas skor kemiripan (semakin kecil = semakin mirip di Chroma cosine distance)
+SIMILARITY_THRESHOLD = 1.2
+
+
+def is_related_to_kp_magang(text):
+    """Cek apakah pertanyaan mengandung kata kunci terkait KP/Magang."""
+    keywords = [
+        # Topik utama
+        "kp", "magang", "kerja praktik", "kerja praktek", "internship",
+        "praktek kerja", "praktik kerja", "pkl", "praktik industri",
+        # Proses & administrasi
+        "pendaftaran", "daftar", "registrasi", "persyaratan", "syarat",
+        "prosedur", "tahap", "langkah", "alur", "proses",
+        "formulir", "form", "dokumen", "berkas", "surat",
+        "proposal", "laporan", "sidang", "seminar", "presentasi",
+        "nilai", "penilaian", "bimbingan", "pembimbing", "dosen",
+        "koordinator", "supervisor", "mentor",
+        # Waktu & jadwal
+        "jadwal", "periode", "semester", "durasi", "waktu",
+        "deadline", "batas waktu", "tenggat",
+        # Lokasi & perusahaan
+        "perusahaan", "instansi", "mitra", "lokasi", "tempat",
+        "penempatan", "posisi",
+        # SKS & akademik
+        "sks", "mata kuliah", "kurikulum", "transkrip",
+        "konversi", "kredit",
+        # Umum terkait
+        "telkom university", "tel-u", "telu",
+    ]
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in keywords)
+
 
 def extract_answer(text):
+    """Ekstrak jawaban bersih dari output LLM."""
     try:
         if "Jawaban:" in text:
             answer = text.split("Jawaban:")[1]
-
             if "Kategori:" in answer:
                 answer = answer.split("Kategori:")[0]
-
             return answer.strip()
-
         return text.strip()
-
-    except:
+    except Exception:
         return text.strip()
 
 
@@ -138,47 +174,57 @@ if prompt:
 
     with st.spinner("Mencari jawaban..."):
         try:
-            query = f"query: {prompt}"
-            docs = db.similarity_search(
-                prompt,
-                k=5
-            )
+            # ===== LAYER 1: Filter kata kunci =====
+            if not is_related_to_kp_magang(prompt):
+                answer = PESAN_DILUAR_TOPIK
 
-            context = ""
-            for doc in docs:
-                context += doc.page_content + "\n\n"
+            else:
+                # ===== LAYER 2: Cek relevansi dari database =====
+                docs = db.similarity_search_with_score(
+                    prompt,
+                    k=5
+                )
 
-            if docs:
-                rag_prompt = f"""
-Anda adalah chatbot resmi KP dan Magang Telkom University.
+                # Filter dokumen yang relevan berdasarkan skor
+                relevant_docs = [
+                    (doc, score) for doc, score in docs
+                    if score <= SIMILARITY_THRESHOLD
+                ]
 
-ATURAN WAJIB:
+                if not relevant_docs:
+                    # Tidak ada dokumen relevan di database
+                    answer = PESAN_DILUAR_TOPIK
 
-1. Jawab HANYA berdasarkan konteks.
-2. Jangan menulis:
-   - "Menurut konteks"
-   - "Berdasarkan konteks"
-   - "Pertanyaan:"
-   - "Jawaban:"
-   - "Berikut jawaban"
-3. Langsung berikan jawaban akhir.
-4. Maksimal 3 kalimat.
-5. Jika tidak ada informasi jawab:
+                else:
+                    # Bangun konteks dari dokumen relevan saja
+                    context = ""
+                    for doc, score in relevant_docs:
+                        context += doc.page_content + "\n\n"
 
-Maaf informasi tersebut tidak ditemukan dalam pedoman KP dan Magang.
+                    # ===== LAYER 3: Prompt ketat ke LLM =====
+                    rag_prompt = f"""[SYSTEM]
+Anda adalah chatbot resmi Kerja Praktik (KP) dan Magang di Telkom University.
+
+ATURAN KETAT YANG TIDAK BOLEH DILANGGAR:
+1. Anda HANYA boleh menjawab pertanyaan tentang KP dan Magang Telkom University.
+2. Anda HANYA boleh menggunakan informasi dari KONTEKS di bawah. DILARANG menggunakan pengetahuan umum atau informasi dari luar konteks.
+3. Jika pertanyaan TIDAK berkaitan dengan KP atau Magang, Anda WAJIB menjawab PERSIS: "Maaf, saya hanya dapat menjawab pertanyaan seputar Kerja Praktik (KP) dan Magang di Telkom University."
+4. Jika KONTEKS tidak mengandung jawaban, Anda WAJIB menjawab PERSIS: "Maaf, informasi tersebut belum tersedia dalam database saya."
+5. DILARANG menjawab pertanyaan tentang topik lain seperti: cuaca, matematika, coding, berita, politik, hiburan, atau topik umum lainnya.
+6. DILARANG mengarang atau menambahkan informasi yang tidak ada dalam KONTEKS.
+7. Jawab dalam Bahasa Indonesia yang baik dan sopan.
 
 KONTEKS:
 {context}
 
-PERTANYAAN:
+[USER]
 {prompt}
 
-JAWABAN:
+[ASSISTANT]
 """
 
-                answer = llm.invoke(rag_prompt)
-            else:
-                answer = "Maaf, informasi tidak ditemukan."
+                    raw_answer = llm.invoke(rag_prompt)
+                    answer = extract_answer(raw_answer)
 
         except Exception as e:
             answer = f"Terjadi kesalahan: {str(e)}"
